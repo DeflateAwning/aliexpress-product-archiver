@@ -1,0 +1,16 @@
+[project]
+name = "aliexpress-product-archiver"
+version = "0.1.0"
+description = "Tool to scrape/archive a list of AliExpress products using Selenium."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "loguru>=0.7.3",
+    "orjson>=3.10.18",
+    "requests>=2.32.4",
+    "selenium>=4.33.0",
+]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+
