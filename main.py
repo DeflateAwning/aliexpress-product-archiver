@@ -78,11 +78,12 @@ def scrape_product_page(driver: Chrome, product_id: int, save_location: Path) ->
     # Print the page as a PDF (best way to see the Description section).
     print_options = PrintOptions()
     pdf_base64 = driver.print_page(print_options)
-    with open(product_folder / f"print_{product_id}.pdf", 'wb') as pdf_file:
+    with open(product_folder / "print.pdf", "wb") as pdf_file:
         pdf_file.write(base64.b64decode(pdf_base64))
 
     # Save product images.
     save_product_images(driver, product_folder)
+    save_images_in_description(driver, product_folder)
 
 
 def wait_for_product_title_to_load_and_get_it(driver: Chrome) -> str:
@@ -309,8 +310,28 @@ def save_product_images(driver: Chrome, product_folder: Path) -> None:
 
         # Download image and save it.
         img_response = requests.get(img_url)
-        img_suffix = img_url.split(".")[-1]
+        img_suffix = img_url.split(".")[-1].split("?")[0]
         with open(product_folder / f"image_{img_num:02}.{img_suffix}", "wb") as f:
+            f.write(img_response.content)
+
+
+def save_images_in_description(driver: Chrome, product_folder: Path) -> None:
+    container = driver.find_element(By.ID, "product-description")
+    images = container.find_elements(By.TAG_NAME, "img")
+    logger.debug(f"Found {len(images)} images in the product description.")
+
+    # Save each image
+    for img_num, img in enumerate(images, start=1):
+        img_url = img.get_attribute("src")
+        if not img_url:
+            logger.warning(f"Description image #{img_num} has no URL. Skipping.")
+            continue
+        logger.info(f"Downloading description image {img_num}: {img_url}")
+
+        img_url = img_url.strip("/")
+        img_response = requests.get(img_url)
+        img_suffix = img_url.split(".")[-1].split("?")[0]
+        with open(product_folder / f"desc_image_{img_num:02}.{img_suffix}", "wb") as f:
             f.write(img_response.content)
 
 
