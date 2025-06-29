@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import random
 import time
 import backoff
 import orjson
@@ -356,12 +357,17 @@ def save_images_in_description(driver: Chrome, product_folder: Path) -> None:
             continue
 
 
-def scrape_files(save_location: Path, file_with_ids: Path | str) -> None:
+def scrape_files(
+    save_location: Path, file_with_ids: Path | str, enable_shuffle: bool
+) -> None:
     driver = Chrome()
     logger.info("Starting scrape_files...")
 
     product_ids = extract_product_ids_from_file(file_with_ids)
     logger.info(f"Extracted {len(product_ids)} product IDs.")
+
+    if enable_shuffle:
+        random.shuffle(product_ids)
 
     already_done_product_ids: set[int] = set()
     for product_id in product_ids:
@@ -392,6 +398,11 @@ def main():
         default=default_save_path,
         help="Directory to save the scraped product data.",
     )
+    parser.add_argument(
+        "--shuffle",
+        action="store_true",
+        help="Shuffle the product IDs before scraping. Useful for randomizing the order of scraping.",
+    )
 
     args = parser.parse_args()
 
@@ -415,7 +426,11 @@ def main():
     # Set up logging to a file in the save location.
     logger.add(log_file)
 
-    scrape_files(save_location=save_location, file_with_ids=file_with_ids)
+    scrape_files(
+        save_location=save_location,
+        file_with_ids=file_with_ids,
+        enable_shuffle=args.shuffle,
+    )
 
 
 if __name__ == "__main__":
