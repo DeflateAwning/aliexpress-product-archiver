@@ -5,7 +5,9 @@ import orjson
 import requests
 import re
 import argparse
+import base64
 
+from selenium.webdriver.common.print_page_options import PrintOptions
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
@@ -72,6 +74,12 @@ def scrape_product_page(driver: Chrome, product_id: int, save_location: Path) ->
     # Save the product page HTML.
     with open(product_folder / "page.html", "w", encoding="utf-8") as f:
         f.write(driver.page_source)
+
+    # Print the page as a PDF (best way to see the Description section).
+    print_options = PrintOptions()
+    pdf_base64 = driver.print_page(print_options)
+    with open(product_folder / f"print_{product_id}.pdf", 'wb') as pdf_file:
+        pdf_file.write(base64.b64decode(pdf_base64))
 
     # Save product images.
     save_product_images(driver, product_folder)
