@@ -5,6 +5,7 @@ description = "Tool to scrape/archive a list of AliExpress products using Seleni
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "backoff>=2.2.1",
     "loguru>=0.7.3",
     "orjson>=3.10.18",
     "requests>=2.32.4",

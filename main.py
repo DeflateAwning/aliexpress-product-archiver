@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 import time
+import backoff
 import orjson
 import requests
 import re
@@ -267,6 +268,17 @@ def load_product_info(driver: Chrome, product_id: int) -> dict[str, str | int | 
     }
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=5)
+def download_image_with_retries(
+    img_url: str, save_folder: Path, img_path_stem: str
+) -> None:
+    img_url = img_url.strip("/")
+    img_response = requests.get(img_url)
+    img_suffix = img_url.split(".")[-1].split("?")[0]
+    with open(save_folder / f"{img_path_stem}.{img_suffix}", "wb") as f:
+        f.write(img_response.content)
+
+
 def save_product_images(driver: Chrome, product_folder: Path) -> None:
     """Save product images to the local filesystem.
 
@@ -308,11 +320,16 @@ def save_product_images(driver: Chrome, product_folder: Path) -> None:
             continue
         logger.info(f"Downloading image {img_num}: {img_url}")
 
-        # Download image and save it.
-        img_response = requests.get(img_url)
-        img_suffix = img_url.split(".")[-1].split("?")[0]
-        with open(product_folder / f"image_{img_num:02}.{img_suffix}", "wb") as f:
-            f.write(img_response.content)
+        # Download the image with retries.
+        try:
+            download_image_with_retries(
+                img_url=img_url,
+                save_folder=product_folder,
+                img_path_stem=f"img_{img_num:02}",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to download image {img_num}: {e}")
+            continue
 
 
 def save_images_in_description(driver: Chrome, product_folder: Path) -> None:
@@ -328,11 +345,15 @@ def save_images_in_description(driver: Chrome, product_folder: Path) -> None:
             continue
         logger.info(f"Downloading description image {img_num}: {img_url}")
 
-        img_url = img_url.strip("/")
-        img_response = requests.get(img_url)
-        img_suffix = img_url.split(".")[-1].split("?")[0]
-        with open(product_folder / f"desc_image_{img_num:02}.{img_suffix}", "wb") as f:
-            f.write(img_response.content)
+        try:
+            download_image_with_retries(
+                img_url=img_url,
+                save_folder=product_folder,
+                img_path_stem=f"desc_{img_num:02}",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to download description image {img_num}: {e}")
+            continue
 
 
 def scrape_files(save_location: Path, file_with_ids: Path | str) -> None:
