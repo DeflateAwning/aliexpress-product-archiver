@@ -6,6 +6,7 @@ import requests
 import re
 import argparse
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
@@ -36,16 +37,31 @@ def scrape_product_page(driver: Chrome, product_id: int, save_location: Path) ->
     # Navigate to the product page.
     driver.get(url)
 
+    product_folder = save_location / str(product_id)
+    product_folder.mkdir(parents=True, exist_ok=True)
+
     # Ensure the page is mostly loaded, then click all the "View More" buttons.
-    wait_for_product_title_to_load_and_get_it(driver)
+    if wait_for_product_title_to_load_and_get_it(driver) == "Not Found":
+        logger.error(f"Product ID {product_id} not found. Skipping.")
+
+        # Save product info to a JSON file.
+        product_info = {
+            "product_id": product_id,
+            "title": "Not Found",
+            "options": {},
+            "specifications": {},
+            "description": "",
+        }
+        (product_folder / "info.json").write_bytes(
+            orjson.dumps(product_info, option=orjson.OPT_INDENT_2)
+        )
+        return
+
     time.sleep(0.5)
     click_all_view_more_buttons(driver)
 
     # Extract product information.
     product_info = load_product_info(driver, product_id)
-
-    product_folder = save_location / str(product_id)
-    product_folder.mkdir(parents=True, exist_ok=True)
 
     # Save product info to a JSON file.
     (product_folder / "info.json").write_bytes(
@@ -62,10 +78,45 @@ def scrape_product_page(driver: Chrome, product_id: int, save_location: Path) ->
 
 
 def wait_for_product_title_to_load_and_get_it(driver: Chrome) -> str:
-    product_title_element = WebDriverWait(driver, 100000).until(
-        EC.presence_of_element_located((By.XPATH, "//h1[@data-pl='product-title']"))
-    )
-    return product_title_element.text.strip()
+    """Wait for the product title to load and return it.
+
+    Also handles other cases, like if the product is deleted.
+
+    Returns "Not Found" if the product is not available.
+    """
+    for try_num in range(max_retry := 200):
+        # First try to get the product title element.
+        try:
+            product_title_element = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//h1[@data-pl='product-title']")
+                )
+            )
+        except TimeoutException as e:
+            logger.warning(f"Attempt {try_num + 1}: Product title not found yet: {e}")
+            time.sleep(0.5)
+        else:
+            return product_title_element.text.strip()
+
+        # Check if the page has a "Not Found" element.
+        try:
+            # Check if a "Not Found" element appears first
+            not_found = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//div[contains(@class, 'not-found--desc')]")
+                )
+            )
+        except TimeoutException:
+            pass  # "Not Found" element did not appear; continue to wait for the product title.
+        else:
+            if not_found:
+                return "Not Found"
+
+        logger.warning(
+            f"Might be stuck on a slow-loading page, or it's waiting for a captcha. Retrying ({try_num + 1}/{max_retry})..."
+        )
+
+    raise RuntimeError("Product title did not load after 100 attempts.")
 
 
 def get_product_options_info(driver: Chrome) -> dict[str, list[str]]:
@@ -155,7 +206,7 @@ def click_all_view_more_buttons(driver: Chrome) -> None:
                 time.sleep(0.5)  # Optional wait for animations or visibility
 
                 button.click()
-                logger.debug(f"Clicked \"View more\" button #{i + 1}")
+                logger.debug(f'Clicked "View more" button #{i + 1}')
 
                 # Optional wait in case content loads dynamically
                 time.sleep(1)
@@ -163,7 +214,7 @@ def click_all_view_more_buttons(driver: Chrome) -> None:
                 logger.warning(f"Could not click button #{i + 1}: {e}")
 
     except Exception as e:
-        logger.warning(f"Error finding \"View more\" buttons: {e}")
+        logger.warning(f'Error finding "View more" buttons: {e}')
 
 
 def get_product_specifications(driver: Chrome) -> dict[str, str]:
