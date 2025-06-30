@@ -32,6 +32,15 @@ def extract_product_ids_from_file(file_with_ids: Path | str) -> list[int]:
     ]
 
 
+@backoff.on_exception(
+    backoff.constant,
+    Exception,
+    max_tries=3,
+    interval=10,
+    on_backoff=lambda details: logger.warning(
+        f"Retrying due to error: {details.get('exception')}"
+    ),
+)
 def scrape_product_page(driver: Chrome, product_id: int, save_location: Path) -> None:
     """Scrape all info about a product page."""
 
