@@ -135,6 +135,9 @@ def wait_for_product_title_to_load_and_get_it(driver: Chrome) -> str:
         logger.warning(
             f"Might be stuck on a slow-loading page, or it's waiting for a captcha. Retrying ({try_num + 1}/{max_retry})..."
         )
+        if try_num % 10 == 9:
+            logger.info("Prompting for using input before retrying...")
+            input("You likely need to solve a captcha. Press Enter to continue retrying...")
 
     raise RuntimeError("Product title did not load after 100 attempts.")
 
